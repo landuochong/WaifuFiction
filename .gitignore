@@ -1,0 +1,8 @@
+.DS_Store
+
+# 图像生成与抠图的中间文件
+*-green.png
+*-raw.png
+*-source.png
+animation-frames/spin-sheet-*.png
+paper-dancer-source.png

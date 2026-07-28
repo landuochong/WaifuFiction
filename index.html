@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="把真人动作变成纸片舞伴的动画工作台" />
+    <title>纸片舞伴</title>
+    <link rel="stylesheet" href="styles.css?v=13" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#creator"><span>✦</span>纸片舞伴</a>
+        <p>把你的动作，送给插画角色</p>
+      </header>
+
+      <section class="hero" aria-labelledby="page-title">
+        <p class="eyebrow">MOTION TO CHARACTER</p>
+        <h1 id="page-title">真人跳舞，<em>纸片人</em>跟着跳。</h1>
+        <p class="intro">上传一张全身角色图和一段跳舞参考视频，做出属于你的动漫舞伴。</p>
+      </section>
+
+      <section class="creator" id="creator" aria-label="纸片舞伴创作工作台">
+        <div class="setup-panel">
+          <div class="step-heading"><span>1</span><div><p>角色设定</p><small>清晰的全身正面图效果最好</small></div></div>
+          <label class="upload-card" for="character-input" id="character-drop">
+            <input id="character-input" type="file" accept="image/*" />
+            <img id="character-image" src="paper-dancer.png" alt="纸片舞伴角色图" />
+            <div class="upload-empty hidden" id="character-empty"><b>＋</b><strong>上传角色图</strong><small>PNG、JPG，建议全身入镜</small></div>
+            <span class="replace" id="replace-character">更换图片</span>
+          </label>
+
+          <div class="step-heading second"><span>2</span><div><p>动作参考</p><small>固定镜头、全身入镜、动作清楚</small></div></div>
+          <label class="video-choice" for="motion-input" id="motion-drop">
+            <input id="motion-input" type="file" accept="video/*" />
+            <span class="video-icon">▶</span><div><strong id="motion-title">上传跳舞视频</strong><small id="motion-detail">MP4、MOV，建议 5–15 秒</small></div><i>＋</i>
+          </label>
+
+          <div class="preset-row" aria-label="或选择一个预设动作">
+            <p>或先试试预设动作</p>
+            <div role="group" aria-label="动作预设">
+              <button class="preset" type="button" data-motion="breathe" data-label="轻轻呼吸">✦ 轻轻呼吸</button>
+              <button class="preset active" type="button" data-motion="bounce" data-label="元气跳跳">↟ 元气跳跳</button>
+              <button class="preset" type="button" data-motion="groove" data-label="左右摇摆">♫ 左右摇摆</button>
+              <button class="preset" type="button" data-motion="spin" data-label="转个圈圈">◌ 转个圈圈</button>
+            </div>
+            <button class="sequence" id="sequence-button" type="button"><span>✦</span>来一段连续舞步 <i>→</i></button>
+            <button class="sequence" id="free-control-button" type="button"><span>◎</span>自由控制四肢 <i>→</i></button>
+            <div class="joint-controls hidden" id="joint-controls">
+              <label>左肩<input type="range" min="-100" max="100" value="8" data-joint="left-shoulder" /></label>
+              <label>左肘<input type="range" min="-130" max="20" value="0" data-joint="left-elbow" /></label>
+              <label>右肩<input type="range" min="-100" max="100" value="-8" data-joint="right-shoulder" /></label>
+              <label>右肘<input type="range" min="-20" max="130" value="0" data-joint="right-elbow" /></label>
+              <label>左髋<input type="range" min="-45" max="45" value="3" data-joint="left-hip" /></label>
+              <label>左膝<input type="range" min="-10" max="110" value="0" data-joint="left-knee" /></label>
+              <label>右髋<input type="range" min="-45" max="45" value="-3" data-joint="right-hip" /></label>
+              <label>右膝<input type="range" min="-110" max="10" value="0" data-joint="right-knee" /></label>
+            </div>
+          </div>
+        </div>
+
+        <section class="preview-panel" aria-labelledby="preview-title">
+          <div class="preview-top"><div><p class="eyebrow">PREVIEW</p><h2 id="preview-title">纸片舞伴预览</h2></div><span class="status" id="status" aria-live="polite">角色已就位</span></div>
+          <div class="preview-stage" id="preview-stage">
+            <div class="grid-glow"></div><div class="spot spot-one"></div><div class="spot spot-two"></div><div class="music-notes" aria-hidden="true">♪　✦　♫</div>
+            <div class="avatar-wrap motion-bounce" id="avatar-wrap">
+              <div class="default-avatar hidden" id="default-avatar" aria-label="默认纸片人角色" role="img">
+                <div class="pony left"></div><div class="pony right"></div><div class="avatar-hair"></div><div class="avatar-face"><i></i><i></i><b></b></div><div class="avatar-body"><span>芽</span></div><div class="avatar-arm arm-left"></div><div class="avatar-arm arm-right"></div><div class="avatar-leg leg-left"></div><div class="avatar-leg leg-right"></div>
+              </div>
+              <div class="bone-puppet hidden" id="bone-puppet" aria-label="可自由控制关节的纸片人">
+                <div class="bone leg-bone left-thigh joint-left-hip"><img src="rig-parts/left-thigh.png" alt="" /><div class="bone calf-bone joint-left-knee"><img src="rig-parts/left-calf.png" alt="" /></div></div>
+                <div class="bone leg-bone right-thigh joint-right-hip"><img src="rig-parts/right-thigh.png" alt="" /><div class="bone calf-bone joint-right-knee"><img src="rig-parts/right-calf.png" alt="" /></div></div>
+                <img class="puppet-part puppet-pelvis" src="rig-parts/pelvis.png" alt="" />
+                <img class="puppet-part puppet-torso" src="rig-parts/torso.png" alt="" />
+                <div class="bone arm-bone left-upper-arm joint-left-shoulder"><img src="rig-parts/left-upper-arm.png" alt="" /><div class="bone forearm-bone joint-left-elbow"><img src="rig-parts/left-forearm.png" alt="" /></div></div>
+                <div class="bone arm-bone right-upper-arm joint-right-shoulder"><img src="rig-parts/right-upper-arm.png" alt="" /><div class="bone forearm-bone joint-right-elbow"><img src="rig-parts/right-forearm.png" alt="" /></div></div>
+                <img class="puppet-part puppet-head" src="rig-parts/head.png" alt="" />
+              </div>
+              <img id="stage-image" class="stage-image" src="animation-frames/ready.png?v=13" alt="纸片舞伴逐帧动画预览" />
+              <div class="floor-shadow"></div>
+            </div>
+            <p class="motion-caption" id="motion-caption">元气小跳</p>
+          </div>
+          <button class="generate" type="button" id="generate-button"><span>✦</span>播放动作预览 <i>→</i></button>
+          <p class="hint" id="hint">点击动作按钮，即可控制纸片人做简单动作。</p>
+        </section>
+      </section>
+
+      <section class="tips" aria-label="创作提示"><b>小提示</b><p>角色图最好为纯色背景、手脚完整且没有被遮挡；真人与纸片人使用同一段动作参考时，节奏会最自然。</p></section>
+    </main>
+    <script src="app.js?v=13"></script>
+  </body>
+</html>
