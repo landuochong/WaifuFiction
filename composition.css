@@ -1,0 +1,86 @@
+.preview-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #171831;
+  touch-action: none;
+}
+
+.composition-canvas {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  cursor: grab;
+  filter: drop-shadow(0 16px 15px rgba(0, 0, 0, .2));
+}
+
+.composition-canvas.dragging {
+  cursor: grabbing;
+}
+
+.layout-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 13px;
+  color: #fff;
+  background: rgba(255, 255, 255, .09);
+}
+
+.layout-controls label {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 9px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.layout-controls input {
+  flex: 1;
+  min-width: 80px;
+  accent-color: #fb85ad;
+}
+
+.layout-controls output {
+  width: 38px;
+  color: #ddd8ff;
+  font-size: 11px;
+  text-align: right;
+}
+
+.layout-controls button {
+  padding: 7px 10px;
+  border-radius: 9px;
+  color: #51469c;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.layout-controls :disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.layout-hint {
+  margin: 7px 3px 0;
+  color: #c9c5eb;
+  font-size: 11px;
+}
+
+.composition-canvas:not(.hidden) ~ .floor-shadow {
+  display: none;
+}
+
+.composition-canvas:not(.hidden) ~ .stage-note {
+  pointer-events: none;
+}

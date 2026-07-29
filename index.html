@@ -6,6 +6,7 @@
     <meta name="description" content="导入标准分层纸片人和真人动作视频，在本机完成动作驱动" />
     <title>纸片舞伴 · 本地动作工作台</title>
     <link rel="stylesheet" href="styles.css?v=21" />
+    <link rel="stylesheet" href="composition.css?v=1" />
     <link rel="stylesheet" href="demo.css?v=2" />
   </head>
   <body>
@@ -18,7 +19,7 @@
       <section class="hero">
         <p class="eyebrow">LOCAL 2D MOTION STUDIO</p>
         <h1>角色绑定一次，<em>动作无限复用</em>。</h1>
-        <p>导入符合规范的分层纸片人素材，再导入任意真人动作视频。素材检查和人体动作识别全部在本机完成。</p>
+        <p>导入分层纸片人和真人动作视频，在本机完成动作识别、画面布局与合成导出。</p>
       </section>
 
       <section class="studio" id="studio">
@@ -43,7 +44,7 @@
             <ul class="validation-errors hidden" id="validation-errors"></ul>
           </section>
 
-          <div class="section-title motion-heading"><span>2</span><div><strong>导入真人动作</strong><small>固定镜头、单人全身入镜，建议 5–30 秒</small></div></div>
+          <div class="section-title motion-heading"><span>2</span><div><strong>导入动作与背景视频</strong><small>视频作为画面底层，同时用于全身动作识别</small></div></div>
           <label class="video-drop" for="motion-input">
             <input id="motion-input" type="file" accept="video/mp4,video/quicktime,video/webm" />
             <b>▶</b><div><strong id="motion-name">选择动作视频</strong><small id="motion-meta">MP4、MOV 或 WebM</small></div><i>＋</i>
@@ -57,16 +58,22 @@
 
         <section class="preview-panel" aria-labelledby="preview-title">
           <div class="preview-head">
-            <div><p class="eyebrow">CHARACTER PREVIEW</p><h2 id="preview-title">纸片人组装预览</h2></div>
+            <div><p class="eyebrow">COMPOSITION PREVIEW</p><h2 id="preview-title">视频与纸片人合成布局</h2></div>
             <span id="studio-state">内置示例</span>
           </div>
           <div class="preview-stage">
             <div class="stage-lights"></div>
             <img class="sample-character" id="sample-character" src="paper-dancer.png" alt="内置纸片人示例" />
-            <canvas class="character-canvas hidden" id="character-canvas" aria-label="导入的分层纸片人合成预览"></canvas>
+            <canvas class="character-canvas hidden" id="character-canvas" aria-hidden="true"></canvas>
+            <canvas class="composition-canvas hidden" id="composition-canvas" aria-label="视频与纸片人的合成布局，拖动纸片人可调整位置"></canvas>
             <div class="floor-shadow"></div>
             <div class="stage-note" id="stage-note"><strong>内置角色仅用于界面预览</strong><small>导入合格的分层素材后将在这里自动组装</small></div>
           </div>
+          <div class="layout-controls" id="layout-controls" aria-label="纸片人布局控制">
+            <label for="character-size"><span>人物大小</span><input id="character-size" type="range" min="30" max="130" value="72" disabled /><output id="character-size-value">72%</output></label>
+            <button id="reset-layout" type="button" disabled>复位布局</button>
+          </div>
+          <p class="layout-hint" id="layout-hint">在舞台中拖动纸片人调整位置，使用滑杆调整大小。</p>
           <button class="primary-action" id="primary-action" type="button"><span>◎</span><strong>先导入分层角色</strong><i>→</i></button>
           <button class="export-action" id="export-action" type="button" disabled><span>●</span><strong>录制并导出视频</strong><i>WEBM</i></button>
           <a class="export-result hidden" id="export-result" download>导出完成 · 下载视频</a>
@@ -78,9 +85,9 @@
         <article class="active"><b>01</b><strong>分层导入</strong><p>检查命名、尺寸、透明画布和必需部件。</p></article>
         <article class="active"><b>02</b><strong>骨架绑定</strong><p>定位肩、肘、腕、髋、膝和踝关节。</p></article>
         <article class="active"><b>03</b><strong>动作重定向</strong><p>固定肢体长度，并对动作丢帧进行平滑补偿。</p></article>
-        <article class="active"><b>04</b><strong>导出视频</strong><p>实时预览后在本机录制带音频的最终动画。</p></article>
+        <article class="active"><b>04</b><strong>合成导出</strong><p>视频置底、纸片人置顶，按当前布局录制带音频成片。</p></article>
       </section>
     </main>
-    <script type="module" src="app.js?v=68"></script>
+    <script type="module" src="app.js?v=69"></script>
   </body>
 </html>

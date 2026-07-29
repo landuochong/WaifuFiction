@@ -30,6 +30,11 @@ const loadDemo = $("#load-demo");
 const loadShortDemo = $("#load-short-demo");
 const previewRigButton = $("#preview-rig");
 const characterCanvas = $("#character-canvas");
+const compositionCanvas = $("#composition-canvas");
+const characterSizeInput = $("#character-size");
+const characterSizeValue = $("#character-size-value");
+const resetLayoutButton = $("#reset-layout");
+const layoutHint = $("#layout-hint");
 const sampleCharacter = $("#sample-character");
 const studioState = $("#studio-state");
 const stageNote = $("#stage-note");
@@ -66,10 +71,15 @@ let exportProgressTimer = null;
 let exportUrl = "";
 let facingBack = false;
 let facingBackConfidence = 0;
+let layoutDragging = false;
+const characterLayout = { x:.5, y:.53, size:.72 };
+const layoutDragOffset = { x:0, y:0 };
 const limbCompositeCanvases = new Map();
 
 exportCanvas.width = 720;
 exportCanvas.height = 1080;
+compositionCanvas.width = exportCanvas.width;
+compositionCanvas.height = exportCanvas.height;
 
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
 const MODULE_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
@@ -230,6 +240,8 @@ async function validateCharacterFolder(files) {
     validationSummary.className = "error";
     studioState.textContent = "素材待修正";
     previewRigButton.disabled = true;
+    characterSizeInput.disabled = true;
+    resetLayoutButton.disabled = true;
     updatePrimaryAction();
     updateExportAction();
     return;
@@ -243,6 +255,8 @@ async function validateCharacterFolder(files) {
   validationProgress.style.width = "100%";
   folderDetail.textContent = `${decoded.length} 个图层 · ${decoded[0][1].width}×${decoded[0][1].height}`;
   previewRigButton.disabled = false;
+  characterSizeInput.disabled = false;
+  resetLayoutButton.disabled = false;
   renderCharacterComposite();
   updatePrimaryAction();
   updateExportAction();
@@ -260,10 +274,11 @@ function renderCharacterComposite() {
     if (layer) context.drawImage(layer.bitmap, 0, 0);
   }
   sampleCharacter.classList.add("hidden");
-  characterCanvas.classList.remove("hidden");
-  stageNote.innerHTML = "<strong>分层角色与骨架已就绪</strong><small>导入动作视频后，身体部件会分别跟随关键点</small>";
+  compositionCanvas.classList.remove("hidden");
+  stageNote.innerHTML = "<strong>合成舞台已就绪</strong><small>拖动纸片人调整位置，使用下方滑杆调整大小</small>";
   studioState.textContent = "角色绑定完成";
   hint.textContent = "角色已按关节配置完成绑定。现在导入真人动作视频，即可驱动头、手臂、腿和脚。";
+  renderLayoutPreview();
   renderExportFrame();
 }
 
@@ -340,15 +355,87 @@ motionInput.addEventListener("change", event => {
   motionReady = true;
   poseState.textContent = "等待识别";
   poseState.className = "pose-state";
+  layoutHint.textContent = "视频将在底层播放；拖动上层纸片人调整位置，使用滑杆调整大小。";
   updatePrimaryAction();
   updateExportAction();
 });
 
 referenceVideo.addEventListener("loadedmetadata", () => {
   const duration = referenceVideo.duration;
-  motionMeta.textContent = `${duration.toFixed(1)} 秒 · ${(motionInput.files[0].size / 1024 / 1024).toFixed(1)} MB`;
+  const durationLabel = Number.isFinite(duration) ? `${duration.toFixed(1)} 秒` : "时长读取中";
+  motionMeta.textContent = `${durationLabel} · ${(motionInput.files[0].size / 1024 / 1024).toFixed(1)} MB`;
+  configureCompositionSize(referenceVideo.videoWidth, referenceVideo.videoHeight);
+  renderLayoutPreview();
   if (duration > 60) hint.textContent = "动作视频较长。绑定阶段建议先用 5–30 秒片段测试，以便快速调整骨架。";
 });
+
+function updateLayoutFromPointer(event) {
+  const bounds = compositionCanvas.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const pointerX = (event.clientX - bounds.left) / bounds.width;
+  const pointerY = (event.clientY - bounds.top) / bounds.height;
+  characterLayout.x = clamp(pointerX - layoutDragOffset.x, 0, 1);
+  characterLayout.y = clamp(pointerY - layoutDragOffset.y, 0, 1);
+  layoutHint.textContent = `人物位置：${Math.round(characterLayout.x * 100)}% · ${Math.round(characterLayout.y * 100)}%`;
+  renderLayoutPreview();
+}
+
+compositionCanvas.addEventListener("pointerdown", event => {
+  if (!characterReady || exporting) return;
+  const bounds = compositionCanvas.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const pointerX = (event.clientX - bounds.left) / bounds.width;
+  const pointerY = (event.clientY - bounds.top) / bounds.height;
+  const normalizedHeight = characterLayout.size;
+  const normalizedWidth = normalizedHeight
+    * characterCanvas.width / characterCanvas.height
+    * compositionCanvas.height / compositionCanvas.width;
+  const insideCharacter = (
+    Math.abs(pointerX - characterLayout.x) <= normalizedWidth / 2
+    && Math.abs(pointerY - characterLayout.y) <= normalizedHeight / 2
+  );
+  if (!insideCharacter) return;
+  layoutDragging = true;
+  layoutDragOffset.x = pointerX - characterLayout.x;
+  layoutDragOffset.y = pointerY - characterLayout.y;
+  compositionCanvas.classList.add("dragging");
+  compositionCanvas.setPointerCapture(event.pointerId);
+});
+
+compositionCanvas.addEventListener("pointermove", event => {
+  if (layoutDragging) updateLayoutFromPointer(event);
+});
+
+const stopLayoutDrag = event => {
+  if (!layoutDragging) return;
+  layoutDragging = false;
+  compositionCanvas.classList.remove("dragging");
+  if (compositionCanvas.hasPointerCapture(event.pointerId)) {
+    compositionCanvas.releasePointerCapture(event.pointerId);
+  }
+};
+compositionCanvas.addEventListener("pointerup", stopLayoutDrag);
+compositionCanvas.addEventListener("pointercancel", stopLayoutDrag);
+
+characterSizeInput.addEventListener("input", () => {
+  characterLayout.size = Number(characterSizeInput.value) / 100;
+  characterSizeValue.textContent = `${characterSizeInput.value}%`;
+  renderLayoutPreview();
+});
+
+resetLayoutButton.addEventListener("click", () => {
+  characterLayout.x = .5;
+  characterLayout.y = .53;
+  characterLayout.size = .72;
+  characterSizeInput.value = "72";
+  characterSizeValue.textContent = "72%";
+  layoutHint.textContent = "布局已复位，可继续拖动纸片人调整位置。";
+  renderLayoutPreview();
+});
+
+for (const eventName of ["loadeddata", "seeked", "timeupdate"]) {
+  referenceVideo.addEventListener(eventName, renderLayoutPreview);
+}
 
 function updatePrimaryAction() {
   if (!characterReady) {
@@ -374,11 +461,20 @@ function updateExportAction() {
   exportAction.innerHTML = "<span>●</span><strong>录制并导出视频</strong><i>WEBM</i>";
 }
 
-function renderExportFrame() {
-  if (!layerBitmaps.size || !characterCanvas.width) return;
-  const context = exportCanvas.getContext("2d");
-  const width = exportCanvas.width;
-  const height = exportCanvas.height;
+function configureCompositionSize(videoWidth, videoHeight) {
+  if (!videoWidth || !videoHeight) return;
+  const maximumDimension = 1920;
+  const scale = Math.min(1, maximumDimension / Math.max(videoWidth, videoHeight));
+  const even = value => Math.max(2, Math.round(value / 2) * 2);
+  const width = even(videoWidth * scale);
+  const height = even(videoHeight * scale);
+  exportCanvas.width = width;
+  exportCanvas.height = height;
+  compositionCanvas.width = width;
+  compositionCanvas.height = height;
+}
+
+function drawFallbackBackground(context, width, height) {
   const background = context.createLinearGradient(0, 0, width, height);
   background.addColorStop(0, "#7067d9");
   background.addColorStop(.48, "#9c72d8");
@@ -391,15 +487,33 @@ function renderExportFrame() {
   glow.addColorStop(1, "rgba(255,255,255,0)");
   context.fillStyle = glow;
   context.fillRect(0, 0, width, height);
+}
 
-  context.save();
-  context.filter = "blur(16px)";
-  context.fillStyle = "rgba(42,32,92,.22)";
-  context.beginPath();
-  context.ellipse(width * .5, height * .9, width * .23, height * .035, 0, 0, Math.PI * 2);
-  context.fill();
-  context.restore();
-  context.drawImage(characterCanvas, 0, 0, width, height);
+function renderCompositionFrame(canvas) {
+  if (!layerBitmaps.size || !characterCanvas.width) return;
+  const context = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  context.clearRect(0, 0, width, height);
+  if (motionReady && referenceVideo.readyState >= 2 && referenceVideo.videoWidth) {
+    context.drawImage(referenceVideo, 0, 0, width, height);
+  } else {
+    drawFallbackBackground(context, width, height);
+  }
+
+  const targetHeight = height * characterLayout.size;
+  const targetWidth = targetHeight * characterCanvas.width / characterCanvas.height;
+  const targetX = characterLayout.x * width - targetWidth / 2;
+  const targetY = characterLayout.y * height - targetHeight / 2;
+  context.drawImage(characterCanvas, targetX, targetY, targetWidth, targetHeight);
+}
+
+function renderLayoutPreview() {
+  renderCompositionFrame(compositionCanvas);
+}
+
+function renderExportFrame() {
+  renderCompositionFrame(exportCanvas);
 }
 
 async function ensurePoseLandmarker() {
@@ -987,6 +1101,7 @@ function renderRigPose(landmarks) {
   for (const name of ["hair_front", "skirt_front", "accessory"]) {
     drawLayerAt(context, name, baseHipCenter, targetHipCenter, bodyRotation, bodyScale);
   }
+  renderLayoutPreview();
 }
 
 function createDemoLandmarks(elapsed) {
@@ -1101,7 +1216,10 @@ function setExportControlsLocked(locked) {
   folderInput.disabled = locked;
   motionInput.disabled = locked;
   loadDemo.disabled = locked;
+  loadShortDemo.disabled = locked;
   previewRigButton.disabled = locked || !characterReady;
+  characterSizeInput.disabled = locked || !characterReady;
+  resetLayoutButton.disabled = locked || !characterReady;
   primaryAction.disabled = locked;
 }
 
@@ -1232,7 +1350,7 @@ async function startVideoExport() {
     videoFrameCallback = referenceVideo.requestVideoFrameCallback(processPoseFrame);
     exportProgressTimer = setInterval(updateExportProgress, 250);
     updateExportProgress();
-    hint.textContent = "正在逐帧识别动作并录制纸片人动画；点击导出按钮可取消。";
+    hint.textContent = "正在逐帧识别动作并录制视频与纸片人的合成画面；点击导出按钮可取消。";
   } catch (error) {
     console.error(error);
     exporting = false;
@@ -1273,6 +1391,7 @@ function processPoseFrame() {
     } else {
       poseState.textContent = "未识别到人物 · 保持上一姿态";
       poseState.className = "pose-state warning";
+      renderLayoutPreview();
     }
     if (exporting) renderExportFrame();
   }
