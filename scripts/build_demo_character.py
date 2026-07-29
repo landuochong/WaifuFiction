@@ -50,13 +50,6 @@ PARTS: dict[str, list[tuple[int, int]]] = {
     "left_ponytail": [(520, 220), (655, 220), (690, 430), (650, 610), (510, 610)],
 }
 
-DRAW_ORDER = [
-    "right_ponytail", "left_ponytail",
-    "right_thigh", "left_thigh", "right_calf", "left_calf", "right_foot", "left_foot",
-    "torso", "pelvis", "right_upper_arm", "left_upper_arm", "right_forearm", "left_forearm",
-    "right_hand", "left_hand", "head",
-]
-
 JOINTS = {
     "head": (470, 220), "neck": (470, 370),
     "rightShoulder": (355, 430), "rightElbow": (280, 640), "rightWrist": (210, 790),
@@ -226,11 +219,6 @@ def main() -> None:
     for name, polygon in PARTS.items():
         layers[name] = extract(name, source, polygon)
         layers[name].save(DEMO / f"{name}.png", optimize=True)
-
-    preview = Image.new("RGBA", CANVAS, (0, 0, 0, 0))
-    for name in DRAW_ORDER:
-        preview.alpha_composite(layers[name])
-    preview.save(DEMO / "preview.png", optimize=True)
 
     normalized = {
         name: [round((x + OFFSET[0]) / CANVAS[0], 6), round((y + OFFSET[1]) / CANVAS[1], 6)]
