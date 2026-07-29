@@ -6,3 +6,9 @@
 *-source.png
 animation-frames/spin-sheet-*.png
 paper-dancer-source.png
+
+# 本地运行与 Python 缓存
+.runtime/
+__pycache__/
+*.pyc
+.venv/

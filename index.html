@@ -2,92 +2,84 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="把真人动作变成纸片舞伴的动画工作台" />
-    <title>纸片舞伴</title>
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="导入标准分层纸片人和真人动作视频，在本机完成动作驱动" />
+    <title>纸片舞伴 · 本地动作工作台</title>
+    <link rel="stylesheet" href="styles.css?v=21" />
+    <link rel="stylesheet" href="demo.css?v=2" />
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
-        <a class="brand" href="#creator"><span>✦</span>纸片舞伴</a>
-        <p>把你的动作，送给插画角色</p>
+        <a class="brand" href="#studio"><span>✦</span>纸片舞伴</a>
+        <span class="local-badge">● 完全本地 · 无按次费用</span>
       </header>
 
-      <section class="hero" aria-labelledby="page-title">
-        <p class="eyebrow">MOTION TO CHARACTER</p>
-        <h1 id="page-title">真人跳舞，<em>纸片人</em>跟着跳。</h1>
-        <p class="intro">上传一张全身角色图和一段跳舞参考视频，做出属于你的动漫舞伴。</p>
+      <section class="hero">
+        <p class="eyebrow">LOCAL 2D MOTION STUDIO</p>
+        <h1>角色绑定一次，<em>动作无限复用</em>。</h1>
+        <p>导入符合规范的分层纸片人素材，再导入任意真人动作视频。素材检查和人体动作识别全部在本机完成。</p>
       </section>
 
-      <section class="creator" id="creator" aria-label="纸片舞伴创作工作台">
-        <div class="setup-panel">
-          <div class="step-heading"><span>1</span><div><p>角色设定</p><small>清晰的全身正面图效果最好</small></div></div>
-          <label class="upload-card" for="character-input" id="character-drop">
-            <input id="character-input" type="file" accept="image/*" />
-            <img id="character-image" src="paper-dancer.png" alt="纸片舞伴角色图" />
-            <div class="upload-empty hidden" id="character-empty"><b>＋</b><strong>上传角色图</strong><small>PNG、JPG，建议全身入镜</small></div>
-            <span class="replace" id="replace-character">更换图片</span>
+      <section class="studio" id="studio">
+        <div class="inputs-panel">
+          <div class="section-title"><span>1</span><div><strong>导入分层纸片人</strong><small>选择包含所有透明 PNG 的素材文件夹</small></div></div>
+          <label class="folder-drop" for="character-folder">
+            <input id="character-folder" type="file" accept="image/png,application/json" multiple webkitdirectory />
+            <b>层</b><div><strong id="folder-title">选择 paperdoll 素材文件夹</strong><small id="folder-detail">15 个必需图层，可附带头发和衣服动态层</small></div><i>＋</i>
           </label>
+          <div class="spec-links">
+            <button id="load-demo" type="button">加载内置演示</button>
+            <button id="preview-rig" type="button" disabled>试播骨架动作</button>
+            <a href="paperdoll-spec.md" target="_blank">查看素材规范</a>
+            <a href="paperdoll-template/manifest.json" download>下载骨架模板</a>
+          </div>
 
-          <div class="step-heading second"><span>2</span><div><p>动作参考</p><small>固定镜头、全身入镜、动作清楚</small></div></div>
-          <label class="video-choice" for="motion-input" id="motion-drop">
-            <input id="motion-input" type="file" accept="video/*" />
-            <span class="video-icon">▶</span><div><strong id="motion-title">上传跳舞视频</strong><small id="motion-detail">MP4、MOV，建议 5–15 秒</small></div><i>＋</i>
+          <section class="validation-card" aria-labelledby="validation-title">
+            <div class="validation-head"><strong id="validation-title">素材检查</strong><span id="validation-summary">尚未导入</span></div>
+            <div class="validation-progress"><i id="validation-progress"></i></div>
+            <div class="layer-grid" id="layer-grid"></div>
+            <ul class="validation-errors hidden" id="validation-errors"></ul>
+          </section>
+
+          <div class="section-title motion-heading"><span>2</span><div><strong>导入真人动作</strong><small>固定镜头、单人全身入镜，建议 5–30 秒</small></div></div>
+          <label class="video-drop" for="motion-input">
+            <input id="motion-input" type="file" accept="video/mp4,video/quicktime,video/webm" />
+            <b>▶</b><div><strong id="motion-name">选择动作视频</strong><small id="motion-meta">MP4、MOV 或 WebM</small></div><i>＋</i>
           </label>
-
-          <div class="preset-row" aria-label="或选择一个预设动作">
-            <p>或先试试预设动作</p>
-            <div role="group" aria-label="动作预设">
-              <button class="preset" type="button" data-motion="breathe" data-label="轻轻呼吸">✦ 轻轻呼吸</button>
-              <button class="preset active" type="button" data-motion="bounce" data-label="元气跳跳">↟ 元气跳跳</button>
-              <button class="preset" type="button" data-motion="groove" data-label="左右摇摆">♫ 左右摇摆</button>
-              <button class="preset" type="button" data-motion="spin" data-label="转个圈圈">◌ 转个圈圈</button>
-            </div>
-            <button class="sequence" id="sequence-button" type="button"><span>✦</span>来一段连续舞步 <i>→</i></button>
-            <button class="sequence" id="free-control-button" type="button"><span>◎</span>自由控制四肢 <i>→</i></button>
-            <div class="joint-controls hidden" id="joint-controls">
-              <label>左肩<input type="range" min="-100" max="100" value="8" data-joint="left-shoulder" /></label>
-              <label>左肘<input type="range" min="-130" max="20" value="0" data-joint="left-elbow" /></label>
-              <label>右肩<input type="range" min="-100" max="100" value="-8" data-joint="right-shoulder" /></label>
-              <label>右肘<input type="range" min="-20" max="130" value="0" data-joint="right-elbow" /></label>
-              <label>左髋<input type="range" min="-45" max="45" value="3" data-joint="left-hip" /></label>
-              <label>左膝<input type="range" min="-10" max="110" value="0" data-joint="left-knee" /></label>
-              <label>右髋<input type="range" min="-45" max="45" value="-3" data-joint="right-hip" /></label>
-              <label>右膝<input type="range" min="-110" max="10" value="0" data-joint="right-knee" /></label>
-            </div>
+          <div class="reference-wrap hidden" id="reference-wrap">
+            <video id="reference-video" controls playsinline muted></video>
+            <canvas id="pose-canvas" aria-hidden="true"></canvas>
+            <span class="pose-state" id="pose-state">等待识别</span>
           </div>
         </div>
 
         <section class="preview-panel" aria-labelledby="preview-title">
-          <div class="preview-top"><div><p class="eyebrow">PREVIEW</p><h2 id="preview-title">纸片舞伴预览</h2></div><span class="status" id="status" aria-live="polite">角色已就位</span></div>
-          <div class="preview-stage" id="preview-stage">
-            <div class="grid-glow"></div><div class="spot spot-one"></div><div class="spot spot-two"></div><div class="music-notes" aria-hidden="true">♪　✦　♫</div>
-            <div class="avatar-wrap motion-bounce" id="avatar-wrap">
-              <div class="default-avatar hidden" id="default-avatar" aria-label="默认纸片人角色" role="img">
-                <div class="pony left"></div><div class="pony right"></div><div class="avatar-hair"></div><div class="avatar-face"><i></i><i></i><b></b></div><div class="avatar-body"><span>芽</span></div><div class="avatar-arm arm-left"></div><div class="avatar-arm arm-right"></div><div class="avatar-leg leg-left"></div><div class="avatar-leg leg-right"></div>
-              </div>
-              <div class="bone-puppet hidden" id="bone-puppet" aria-label="可自由控制关节的纸片人">
-                <div class="bone leg-bone left-thigh joint-left-hip"><img src="rig-parts/left-thigh.png" alt="" /><div class="bone calf-bone joint-left-knee"><img src="rig-parts/left-calf.png" alt="" /></div></div>
-                <div class="bone leg-bone right-thigh joint-right-hip"><img src="rig-parts/right-thigh.png" alt="" /><div class="bone calf-bone joint-right-knee"><img src="rig-parts/right-calf.png" alt="" /></div></div>
-                <img class="puppet-part puppet-pelvis" src="rig-parts/pelvis.png" alt="" />
-                <img class="puppet-part puppet-torso" src="rig-parts/torso.png" alt="" />
-                <div class="bone arm-bone left-upper-arm joint-left-shoulder"><img src="rig-parts/left-upper-arm.png" alt="" /><div class="bone forearm-bone joint-left-elbow"><img src="rig-parts/left-forearm.png" alt="" /></div></div>
-                <div class="bone arm-bone right-upper-arm joint-right-shoulder"><img src="rig-parts/right-upper-arm.png" alt="" /><div class="bone forearm-bone joint-right-elbow"><img src="rig-parts/right-forearm.png" alt="" /></div></div>
-                <img class="puppet-part puppet-head" src="rig-parts/head.png" alt="" />
-              </div>
-              <img id="stage-image" class="stage-image" src="animation-frames/ready.png?v=13" alt="纸片舞伴逐帧动画预览" />
-              <div class="floor-shadow"></div>
-            </div>
-            <p class="motion-caption" id="motion-caption">元气小跳</p>
+          <div class="preview-head">
+            <div><p class="eyebrow">CHARACTER PREVIEW</p><h2 id="preview-title">纸片人组装预览</h2></div>
+            <span id="studio-state">内置示例</span>
           </div>
-          <button class="generate" type="button" id="generate-button"><span>✦</span>播放动作预览 <i>→</i></button>
-          <p class="hint" id="hint">点击动作按钮，即可控制纸片人做简单动作。</p>
+          <div class="preview-stage">
+            <div class="stage-lights"></div>
+            <img class="sample-character" id="sample-character" src="paper-dancer.png" alt="内置纸片人示例" />
+            <canvas class="character-canvas hidden" id="character-canvas" aria-label="导入的分层纸片人合成预览"></canvas>
+            <div class="floor-shadow"></div>
+            <div class="stage-note" id="stage-note"><strong>内置角色仅用于界面预览</strong><small>导入合格的分层素材后将在这里自动组装</small></div>
+          </div>
+          <button class="primary-action" id="primary-action" type="button"><span>◎</span><strong>先导入分层角色</strong><i>→</i></button>
+          <button class="export-action" id="export-action" type="button" disabled><span>●</span><strong>录制并导出视频</strong><i>WEBM</i></button>
+          <a class="export-result hidden" id="export-result" download>导出完成 · 下载视频</a>
+          <p class="hint" id="hint">导入合格的角色和动作视频后，头、手臂、腿和脚会作为独立图层跟随人体关键点。</p>
         </section>
       </section>
 
-      <section class="tips" aria-label="创作提示"><b>小提示</b><p>角色图最好为纯色背景、手脚完整且没有被遮挡；真人与纸片人使用同一段动作参考时，节奏会最自然。</p></section>
+      <section class="pipeline">
+        <article class="active"><b>01</b><strong>分层导入</strong><p>检查命名、尺寸、透明画布和必需部件。</p></article>
+        <article class="active"><b>02</b><strong>骨架绑定</strong><p>定位肩、肘、腕、髋、膝和踝关节。</p></article>
+        <article class="active"><b>03</b><strong>动作重定向</strong><p>固定肢体长度，并对动作丢帧进行平滑补偿。</p></article>
+        <article class="active"><b>04</b><strong>导出视频</strong><p>实时预览后在本机录制带音频的最终动画。</p></article>
+      </section>
     </main>
-    <script src="app.js?v=13"></script>
+    <script type="module" src="app.js?v=52"></script>
   </body>
 </html>

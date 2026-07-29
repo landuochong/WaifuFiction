@@ -1,0 +1,64 @@
+.spec-links button {
+  padding: 0;
+  border: 0;
+  color: #6557c7;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 900;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.spec-links button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.export-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 10px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 15px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 900;
+}
+
+.export-action:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.export-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.export-action > span {
+  color: #ff9aba;
+}
+
+.export-action > i {
+  margin-left: auto;
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.8px;
+}
+
+.export-result {
+  display: block;
+  margin-top: 10px;
+  padding: 11px;
+  border-radius: 12px;
+  color: #dcfff0;
+  background: rgba(48, 169, 115, 0.3);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 900;
+}

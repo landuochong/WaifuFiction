@@ -1,0 +1,26 @@
+{
+  "format": "paperdoll",
+  "version": 1,
+  "coordinateSystem": "normalized",
+  "sideConvention": "character",
+  "canvas": {
+    "minWidth": 1024,
+    "minHeight": 1024
+  },
+  "joints": {
+    "head": [0.5, 0.2],
+    "neck": [0.5, 0.32],
+    "leftShoulder": [0.58, 0.36],
+    "leftElbow": [0.64, 0.5],
+    "leftWrist": [0.66, 0.64],
+    "rightShoulder": [0.42, 0.36],
+    "rightElbow": [0.36, 0.5],
+    "rightWrist": [0.34, 0.64],
+    "leftHip": [0.54, 0.59],
+    "leftKnee": [0.55, 0.76],
+    "leftAnkle": [0.56, 0.92],
+    "rightHip": [0.46, 0.59],
+    "rightKnee": [0.45, 0.76],
+    "rightAnkle": [0.44, 0.92]
+  }
+}
