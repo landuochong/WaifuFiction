@@ -2,6 +2,12 @@
 
 一个本地运行的“分层纸片人 + 真人动作视频”工作台。角色按照标准规范绑定一次，之后可以反复导入动作，不调用付费视频生成 API。
 
+## 文档
+
+- [系统设计](DESIGN.md)：整体架构、动作处理管线、渲染层级、素材构建和已知边界。
+- [分层素材规范](paperdoll-spec.md)：角色图层、画布、关节重叠和 `manifest.json` 要求。
+- [骨架模板](paperdoll-template/manifest.json)：制作新角色时可复制并调整的关节配置。
+
 ## 当前阶段
 
 - 导入包含多张透明 PNG 的角色素材文件夹。
@@ -33,9 +39,38 @@ python3 server.py
 
 - 完整规则：[paperdoll-spec.md](paperdoll-spec.md)
 - 骨架模板：[paperdoll-template/manifest.json](paperdoll-template/manifest.json)
-- 内置演示素材：[demo-character/](demo-character/)（15 个必需图层、2 个双马尾层和关节配置）
+- 双马尾演示：[demo-character/](demo-character/)（15 个必需图层、2 个双马尾层和关节配置）
+- 短发演示：[short-hair-character/](short-hair-character/)（15 个必需图层和关节配置）
 
-页面中的“加载内置演示”可直接读取这套素材，不需要先打开文件选择器。
+页面中的“加载内置演示”和“加载短发演示”可以直接读取对应素材，不需要先打开文件选择器。
+
+## 构建演示素材
+
+演示素材生成脚本依赖 Pillow：
+
+```bash
+python3 -m pip install Pillow
+```
+
+重新生成双马尾素材：
+
+```bash
+python3 scripts/build_demo_character.py
+```
+
+短发角色与双马尾角色使用相同画布、服装、身体比例和关节点，因此复用已经调校好的六个手臂图层，以避免肩、肘接缝因重新切图发生变化：
+
+```bash
+python3 scripts/build_demo_character.py \
+  --source short-hair-character/master.png \
+  --output short-hair-character \
+  --name "短发女孩 Demo" \
+  --without-ponytails \
+  --without-sleeve-reconstruction \
+  --reuse-arms-from demo-character
+```
+
+`--reuse-arms-from` 只适用于画布尺寸、身体比例、服装和骨架关节都一致的角色；普通用户素材不应强行复用。
 
 ## 动作与导出
 
