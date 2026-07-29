@@ -27,6 +27,7 @@ const validationSummary = $("#validation-summary");
 const validationProgress = $("#validation-progress");
 const validationErrors = $("#validation-errors");
 const loadDemo = $("#load-demo");
+const loadShortDemo = $("#load-short-demo");
 const previewRigButton = $("#preview-rig");
 const characterCanvas = $("#character-canvas");
 const sampleCharacter = $("#sample-character");
@@ -73,7 +74,7 @@ exportCanvas.height = 1080;
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
 const MODULE_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
-const DEMO_ASSET_VERSION = "14";
+const DEMO_ASSET_VERSION = "24";
 const CONNECTIONS = [
   [0,7],[0,8],[7,8],[11,12],[11,13],[13,15],[12,14],[14,16],
   [15,17],[15,19],[16,18],[16,20],[11,23],[12,24],[23,24],
@@ -278,20 +279,21 @@ folderInput.addEventListener("change", async event => {
   await validateCharacterFolder(files);
 });
 
-loadDemo.addEventListener("click", async () => {
-  loadDemo.disabled = true;
-  loadDemo.textContent = "正在加载…";
-  folderTitle.textContent = "双马尾舞伴 Demo";
+async function loadBuiltInCharacter(button, { path, title, optionalLayers = [] }) {
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "正在加载…";
+  folderTitle.textContent = title;
   folderDetail.textContent = "正在读取项目内置分层素材…";
   validationSummary.textContent = "检查中";
   try {
     resetRigTracking();
-    const manifestResponse = await fetch(`demo-character/manifest.json?v=${DEMO_ASSET_VERSION}`, { cache:"reload" });
+    const manifestResponse = await fetch(`${path}/manifest.json?v=${DEMO_ASSET_VERSION}`, { cache:"reload" });
     if (!manifestResponse.ok) throw new Error("无法读取演示角色 manifest.json");
     setRigManifest(await manifestResponse.json());
-    const names = [...REQUIRED_LAYERS, "left_ponytail", "right_ponytail"];
+    const names = [...REQUIRED_LAYERS, ...optionalLayers];
     const files = await Promise.all(names.map(async name => {
-      const response = await fetch(`demo-character/${name}.png?v=${DEMO_ASSET_VERSION}`, { cache:"reload" });
+      const response = await fetch(`${path}/${name}.png?v=${DEMO_ASSET_VERSION}`, { cache:"reload" });
       if (!response.ok) throw new Error(`无法读取 ${name}.png`);
       return new File([await response.blob()], `${name}.png`, { type:"image/png" });
     }));
@@ -303,9 +305,24 @@ loadDemo.addEventListener("click", async () => {
     validationSummary.className = "error";
     updateExportAction();
   } finally {
-    loadDemo.disabled = false;
-    loadDemo.textContent = "加载内置演示";
+    button.disabled = false;
+    button.textContent = originalLabel;
   }
+}
+
+loadDemo.addEventListener("click", () => {
+  loadBuiltInCharacter(loadDemo, {
+    path: "demo-character",
+    title: "双马尾舞伴 Demo",
+    optionalLayers: ["left_ponytail", "right_ponytail"]
+  });
+});
+
+loadShortDemo.addEventListener("click", () => {
+  loadBuiltInCharacter(loadShortDemo, {
+    path: "short-hair-character",
+    title: "短发女孩 Demo"
+  });
 });
 
 motionInput.addEventListener("change", event => {
@@ -962,6 +979,7 @@ function renderRigPose(landmarks) {
   };
   drawForegroundForearm("right", rightArm);
   drawForegroundForearm("left", leftArm);
+
   drawHand("right", rightArm);
   drawHand("left", leftArm);
 

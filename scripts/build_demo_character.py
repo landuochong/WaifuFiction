@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import shutil
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
@@ -23,14 +25,16 @@ PARTS: dict[str, list[tuple[int, int]]] = {
     # Keep the torso mask inside the shoulder/waist silhouette. The previous
     # wide lower corners also captured the original A-pose sleeves.
     "torso": [
-        (355, 330), (585, 330), (590, 430), (570, 555),
+        (355, 330), (585, 330), (610, 405), (570, 470), (545, 555),
         (595, 675), (570, 705), (370, 705), (345, 675),
-        (370, 555), (350, 430),
+        (395, 555), (370, 470), (330, 405),
     ],
     # A belt plus central crotch bridge. Wide rigid "shorts" create a hard
     # horizontal edge when the independently warped thighs spread apart.
     "pelvis": [
-        (315, 625), (625, 625), (630, 750), (520, 770),
+        # Start narrowly above the waistband, then widen over the denim. A
+        # wide top edge also captures the A-pose sleeve tips as rigid shards.
+        (370, 625), (570, 625), (630, 750), (520, 770),
         (495, 835), (445, 835),
         (420, 770), (310, 750),
     ],
@@ -40,10 +44,10 @@ PARTS: dict[str, list[tuple[int, int]]] = {
     "left_upper_arm": [(540, 430), (630, 405), (720, 620), (695, 690), (600, 650)],
     "left_forearm": [(595, 625), (705, 600), (765, 790), (680, 805)],
     "left_hand": [(685, 755), (775, 755), (795, 900), (680, 885)],
-    "right_thigh": [(280, 690), (480, 690), (480, 1135), (230, 1135)],
+    "right_thigh": [(310, 690), (480, 690), (480, 1135), (230, 1135)],
     "right_calf": [(225, 1040), (475, 1040), (420, 1490), (205, 1490)],
     "right_foot": [(205, 1420), (430, 1420), (430, 1605), (190, 1605)],
-    "left_thigh": [(460, 690), (660, 690), (710, 1135), (460, 1135)],
+    "left_thigh": [(460, 690), (630, 690), (710, 1135), (460, 1135)],
     "left_calf": [(465, 1040), (715, 1040), (735, 1490), (520, 1490)],
     "left_foot": [(510, 1420), (735, 1420), (750, 1605), (510, 1605)],
     "right_ponytail": [(285, 220), (420, 220), (430, 610), (290, 610), (250, 430)],
@@ -70,6 +74,56 @@ HAIR_SEEDS = {
     "right_ponytail": (350, 430),
     "left_ponytail": (590, 430),
 }
+
+
+def resolve_fabric_seed(
+    source: Image.Image, alpha: Image.Image, seed: tuple[int, int]
+) -> tuple[int, int]:
+    """Move a seed a few pixels inward when generated silhouettes drift."""
+    source_pixels = source.load()
+    alpha_pixels = alpha.load()
+
+    def is_fabric(x: int, y: int) -> bool:
+        if alpha_pixels[x, y] == 0:
+            return False
+        red, green, blue, _ = source_pixels[x, y]
+        maximum = max(red, green, blue)
+        minimum = min(red, green, blue)
+        saturation = (maximum - minimum) / max(1, maximum)
+        return saturation < 0.22 and 55 < maximum < 248
+
+    if is_fabric(*seed):
+        return seed
+    candidates = (
+        ((x - seed[0]) ** 2 + (y - seed[1]) ** 2, x, y)
+        for y in range(max(0, seed[1] - 80), min(source.height, seed[1] + 81))
+        for x in range(max(0, seed[0] - 80), min(source.width, seed[0] + 81))
+        if is_fabric(x, y)
+    )
+    nearest = min(candidates, default=None)
+    if nearest is None:
+        raise SystemExit(f"No gray clothing found near fabric seed {seed}")
+    return nearest[1], nearest[2]
+
+
+def average_fabric_color(
+    source: Image.Image, seed: tuple[int, int], radius: int = 12
+) -> tuple[int, int, int]:
+    """Average nearby neutral sleeve pixels for reconstructed joint backing."""
+    samples = []
+    for sample_y in range(seed[1] - radius, seed[1] + radius + 1):
+        for sample_x in range(seed[0] - radius, seed[0] + radius + 1):
+            red, green, blue, _ = source.getpixel((sample_x, sample_y))
+            maximum = max(red, green, blue)
+            minimum = min(red, green, blue)
+            if maximum - minimum < 35 and 90 < maximum < 225:
+                samples.append((red, green, blue))
+    if not samples:
+        return (154, 152, 150)
+    return tuple(
+        sum(sample[channel] for sample in samples) // len(samples)
+        for channel in range(3)
+    )
 
 
 def fabric_only_alpha(source: Image.Image, alpha: Image.Image, seed: tuple[int, int]) -> Image.Image:
@@ -145,13 +199,20 @@ def hair_only_alpha(source: Image.Image, alpha: Image.Image, seed: tuple[int, in
     return ImageChops.multiply(ImageChops.multiply(alpha, connected), allowed_colors)
 
 
-def extract(name: str, source: Image.Image, polygon: list[tuple[int, int]]) -> Image.Image:
+def extract(
+    name: str,
+    source: Image.Image,
+    polygon: list[tuple[int, int]],
+    reconstruct_sleeves: bool = True,
+) -> Image.Image:
     mask = Image.new("L", source.size, 0)
     ImageDraw.Draw(mask).polygon(polygon, fill=255)
     source_alpha = source.getchannel("A")
     alpha = ImageChops.multiply(source_alpha, mask)
+    fabric_seed = None
     if name in FABRIC_SEEDS:
-        alpha = fabric_only_alpha(source, alpha, FABRIC_SEEDS[name])
+        fabric_seed = resolve_fabric_seed(source, alpha, FABRIC_SEEDS[name])
+        alpha = fabric_only_alpha(source, alpha, fabric_seed)
     if name in HAIR_SEEDS:
         alpha = hair_only_alpha(source, alpha, HAIR_SEEDS[name])
     if name == "torso":
@@ -165,27 +226,32 @@ def extract(name: str, source: Image.Image, polygon: list[tuple[int, int]]) -> I
         alpha = ImageChops.lighter(alpha, ImageChops.multiply(source_alpha, neck_mask))
     part = source.copy()
     part.putalpha(alpha)
-    if name in {"right_upper_arm", "left_upper_arm"}:
-        # The flattened master has hair painted over both shoulder sockets.
-        # Reconstruct a complete rounded sleeve underneath the surviving
-        # texture; torso and ponytail layers hide most of this base naturally.
-        shoulder_name = "rightShoulder" if name.startswith("right") else "leftShoulder"
-        shoulder = JOINTS[shoulder_name]
-        sleeve_seed = FABRIC_SEEDS[name]
-        sleeve_join = (
-            round(shoulder[0] + (sleeve_seed[0] - shoulder[0]) * 0.72),
-            round(shoulder[1] + (sleeve_seed[1] - shoulder[1]) * 0.72),
-        )
-        red, green, blue, _ = source.getpixel(sleeve_seed)
+    if reconstruct_sleeves and name in {
+        "right_upper_arm", "left_upper_arm", "right_forearm", "left_forearm"
+    }:
+        # Build a complete round-ended sleeve tube underneath the surviving
+        # generated texture. The source A-pose has diagonal cuts at both ends;
+        # two independently rotated raw cuts cannot form a stable elbow.
+        side = "right" if name.startswith("right") else "left"
+        if name.endswith("upper_arm"):
+            start = JOINTS[f"{side}Shoulder"]
+            end = JOINTS[f"{side}Elbow"]
+            width = 54
+        else:
+            start = JOINTS[f"{side}Elbow"]
+            end = JOINTS[f"{side}Wrist"]
+            width = 48
+        sleeve_seed = fabric_seed or FABRIC_SEEDS[name]
+        red, green, blue = average_fabric_color(source, sleeve_seed)
         sleeve_base = Image.new("RGBA", source.size, (0, 0, 0, 0))
         sleeve_draw = ImageDraw.Draw(sleeve_base)
         sleeve_draw.line(
-            [shoulder, sleeve_join],
+            [start, end],
             fill=(red, green, blue, 255),
-            width=58,
+            width=width,
         )
-        radius = 29
-        for center in (shoulder, sleeve_join):
+        radius = width // 2
+        for center in (start, end):
             sleeve_draw.ellipse(
                 (
                     center[0] - radius,
@@ -211,14 +277,57 @@ def extract(name: str, source: Image.Image, polygon: list[tuple[int, int]]) -> I
 
 
 def main() -> None:
-    source = Image.open(SOURCE).convert("RGBA")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, default=SOURCE)
+    parser.add_argument("--output", type=Path, default=DEMO)
+    parser.add_argument("--name", default="双马尾舞伴 Demo")
+    parser.add_argument(
+        "--without-ponytails",
+        action="store_true",
+        help="Build the standard 15-layer character without optional ponytail layers.",
+    )
+    parser.add_argument(
+        "--without-sleeve-reconstruction",
+        action="store_true",
+        help="Keep naturally complete shoulder pixels instead of rebuilding hidden sleeve roots.",
+    )
+    parser.add_argument(
+        "--reuse-arms-from",
+        type=Path,
+        help="Reuse a previously tuned six-layer arm set with the same canvas and joints.",
+    )
+    args = parser.parse_args()
+    args.output.mkdir(parents=True, exist_ok=True)
+
+    source = Image.open(args.source).convert("RGBA")
     if source.size != (941, 1672):
         raise SystemExit(f"Unexpected master size: {source.size}")
 
     layers: dict[str, Image.Image] = {}
-    for name, polygon in PARTS.items():
-        layers[name] = extract(name, source, polygon)
-        layers[name].save(DEMO / f"{name}.png", optimize=True)
+    parts = {
+        name: polygon
+        for name, polygon in PARTS.items()
+        if not args.without_ponytails or not name.endswith("_ponytail")
+    }
+    for name, polygon in parts.items():
+        layers[name] = extract(
+            name,
+            source,
+            polygon,
+            reconstruct_sleeves=not args.without_sleeve_reconstruction,
+        )
+        layers[name].save(args.output / f"{name}.png", optimize=True)
+
+    if args.reuse_arms_from:
+        for name in (
+            "right_upper_arm", "right_forearm", "right_hand",
+            "left_upper_arm", "left_forearm", "left_hand",
+        ):
+            source_layer = args.reuse_arms_from / f"{name}.png"
+            with Image.open(source_layer) as reused:
+                if reused.size != CANVAS:
+                    raise SystemExit(f"Unexpected reused layer size: {source_layer} {reused.size}")
+            shutil.copy2(source_layer, args.output / source_layer.name)
 
     normalized = {
         name: [round((x + OFFSET[0]) / CANVAS[0], 6), round((y + OFFSET[1]) / CANVAS[1], 6)]
@@ -227,14 +336,16 @@ def main() -> None:
     manifest = {
         "format": "paperdoll",
         "version": 1,
-        "name": "双马尾舞伴 Demo",
+        "name": args.name,
         "coordinateSystem": "normalized",
         "sideConvention": "character",
         "canvas": {"width": CANVAS[0], "height": CANVAS[1]},
         "joints": normalized,
         "notes": "Generated demo asset. Joint polygons intentionally overlap for rotation.",
     }
-    (DEMO / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    (args.output / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    )
 
 
 if __name__ == "__main__":

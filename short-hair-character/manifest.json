@@ -1,0 +1,70 @@
+{
+  "format": "paperdoll",
+  "version": 1,
+  "name": "短发女孩 Demo",
+  "coordinateSystem": "normalized",
+  "sideConvention": "character",
+  "canvas": {
+    "width": 1200,
+    "height": 1800
+  },
+  "joints": {
+    "head": [
+      0.499167,
+      0.157778
+    ],
+    "neck": [
+      0.499167,
+      0.241111
+    ],
+    "rightShoulder": [
+      0.403333,
+      0.274444
+    ],
+    "rightElbow": [
+      0.340833,
+      0.391111
+    ],
+    "rightWrist": [
+      0.2825,
+      0.474444
+    ],
+    "leftShoulder": [
+      0.595,
+      0.274444
+    ],
+    "leftElbow": [
+      0.6575,
+      0.391111
+    ],
+    "leftWrist": [
+      0.715833,
+      0.474444
+    ],
+    "rightHip": [
+      0.440833,
+      0.457778
+    ],
+    "rightKnee": [
+      0.399167,
+      0.641111
+    ],
+    "rightAnkle": [
+      0.374167,
+      0.841111
+    ],
+    "leftHip": [
+      0.5575,
+      0.457778
+    ],
+    "leftKnee": [
+      0.599167,
+      0.641111
+    ],
+    "leftAnkle": [
+      0.624167,
+      0.841111
+    ]
+  },
+  "notes": "Generated demo asset. Joint polygons intentionally overlap for rotation."
+}
