@@ -43,6 +43,15 @@ const hint = $("#hint");
 const motionInput = $("#motion-input");
 const motionName = $("#motion-name");
 const motionMeta = $("#motion-meta");
+const fileModeButton = $("#file-mode");
+const cameraModeButton = $("#camera-mode");
+const videoDrop = $(".video-drop");
+const cameraPanel = $("#camera-panel");
+const cameraSelect = $("#camera-select");
+const cameraToggle = $("#camera-toggle");
+const cameraMirrorInput = $("#camera-mirror");
+const cameraMicInput = $("#camera-mic");
+const cameraStatus = $("#camera-status");
 const referenceWrap = $("#reference-wrap");
 const referenceVideo = $("#reference-video");
 const poseCanvas = $("#pose-canvas");
@@ -53,6 +62,12 @@ const exportCanvas = document.createElement("canvas");
 
 let characterReady = false;
 let motionReady = false;
+let sourceMode = "file";
+let cameraStream = null;
+let cameraMirrored = true;
+let liveRecordingStartedAt = 0;
+let liveFrameCount = 0;
+let liveFpsStartedAt = 0;
 let layerBitmaps = new Map();
 let motionUrl = "";
 let poseLandmarker = null;
@@ -277,7 +292,9 @@ function renderCharacterComposite() {
   compositionCanvas.classList.remove("hidden");
   stageNote.innerHTML = "<strong>合成舞台已就绪</strong><small>拖动纸片人调整位置，使用下方滑杆调整大小</small>";
   studioState.textContent = "角色绑定完成";
-  hint.textContent = "角色已按关节配置完成绑定。现在导入真人动作视频，即可驱动头、手臂、腿和脚。";
+  hint.textContent = sourceMode === "camera"
+    ? "角色已按关节配置完成绑定。开启摄像头后即可实时驱动头、手臂、腿和脚。"
+    : "角色已按关节配置完成绑定。现在导入真人动作视频，即可驱动头、手臂、腿和脚。";
   renderLayoutPreview();
   renderExportFrame();
 }
@@ -340,6 +357,166 @@ loadShortDemo.addEventListener("click", () => {
   });
 });
 
+function cancelVideoFrameLoop() {
+  if (videoFrameCallback !== null && "cancelVideoFrameCallback" in referenceVideo) {
+    referenceVideo.cancelVideoFrameCallback(videoFrameCallback);
+  }
+  videoFrameCallback = null;
+}
+
+function releaseCameraStream() {
+  cancelVideoFrameLoop();
+  if (cameraStream) {
+    for (const track of cameraStream.getTracks()) track.stop();
+  }
+  cameraStream = null;
+  referenceVideo.srcObject = null;
+  cameraToggle.textContent = "开启摄像头";
+  cameraToggle.classList.remove("live");
+  cameraSelect.disabled = true;
+  cameraMicInput.disabled = false;
+}
+
+async function refreshCameraDevices(selectedDeviceId = "") {
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  const devices = (await navigator.mediaDevices.enumerateDevices())
+    .filter(device => device.kind === "videoinput");
+  cameraSelect.innerHTML = "";
+  for (const [index, device] of devices.entries()) {
+    const option = document.createElement("option");
+    option.value = device.deviceId;
+    option.textContent = device.label || `摄像头 ${index + 1}`;
+    option.selected = device.deviceId === selectedDeviceId;
+    cameraSelect.append(option);
+  }
+  cameraSelect.disabled = devices.length < 2;
+}
+
+function updateSourceModeUi() {
+  const cameraMode = sourceMode === "camera";
+  fileModeButton.classList.toggle("active", !cameraMode);
+  cameraModeButton.classList.toggle("active", cameraMode);
+  videoDrop.classList.toggle("hidden", cameraMode);
+  cameraPanel.classList.toggle("hidden", !cameraMode);
+  referenceWrap.classList.toggle("camera-mirrored", cameraMode && cameraMirrored);
+  updatePrimaryAction();
+  updateExportAction();
+}
+
+function setSourceMode(mode) {
+  if (exporting || mode === sourceMode) return;
+  stopPoseTracking();
+  resetRigTracking();
+  if (mode === "camera") {
+    referenceVideo.pause();
+    sourceMode = "camera";
+    motionReady = Boolean(cameraStream);
+    if (!cameraStream) referenceWrap.classList.add("hidden");
+    studioState.textContent = characterReady ? "等待开启摄像头" : "先导入角色";
+    hint.textContent = "开启摄像头后，点击“开始实时跟随”即可让纸片人同步动作。";
+  } else {
+    releaseCameraStream();
+    sourceMode = "file";
+    referenceVideo.controls = true;
+    if (motionUrl) {
+      referenceVideo.src = motionUrl;
+      referenceVideo.load();
+      referenceWrap.classList.remove("hidden");
+      motionReady = true;
+    } else {
+      referenceVideo.removeAttribute("src");
+      referenceVideo.load();
+      referenceWrap.classList.add("hidden");
+      motionReady = false;
+    }
+    studioState.textContent = characterReady ? "角色绑定完成" : "内置示例";
+    hint.textContent = "导入动作视频后，可预览纸片人跟随效果并合成导出。";
+  }
+  updateSourceModeUi();
+}
+
+async function startCamera(deviceId = "") {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraStatus.textContent = "当前浏览器不支持摄像头访问，请使用最新版 Chrome 或 Edge。";
+    return;
+  }
+  stopPoseTracking();
+  releaseCameraStream();
+  cameraToggle.disabled = true;
+  cameraToggle.textContent = "正在连接…";
+  cameraStatus.textContent = cameraMicInput.checked
+    ? "正在请求摄像头和麦克风权限…"
+    : "正在请求摄像头权限…";
+  const video = {
+    deviceId:deviceId ? { exact:deviceId } : undefined,
+    width:{ ideal:1280 }, height:{ ideal:720 }, frameRate:{ ideal:30, max:30 }
+  };
+  try {
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video, audio:cameraMicInput.checked });
+    } catch (audioError) {
+      if (!cameraMicInput.checked) throw audioError;
+      console.warn("麦克风不可用，改用静音摄像头", audioError);
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video, audio:false });
+    }
+    sourceMode = "camera";
+    referenceVideo.removeAttribute("src");
+    referenceVideo.srcObject = cameraStream;
+    referenceVideo.controls = false;
+    referenceVideo.muted = true;
+    referenceWrap.classList.remove("hidden");
+    motionReady = true;
+    await referenceVideo.play();
+    const videoTrack = cameraStream.getVideoTracks()[0];
+    const settings = videoTrack?.getSettings?.() || {};
+    await refreshCameraDevices(settings.deviceId || deviceId);
+    cameraToggle.textContent = "关闭摄像头";
+    cameraToggle.classList.add("live");
+    cameraMicInput.disabled = true;
+    cameraStatus.textContent = `${settings.width || referenceVideo.videoWidth}×${settings.height || referenceVideo.videoHeight} · 等待实时跟随`;
+    poseState.textContent = "摄像头已连接";
+    poseState.className = "pose-state active";
+    studioState.textContent = "摄像头已就绪";
+    layoutHint.textContent = "摄像头在底层实时播放；拖动纸片人调整位置，使用滑杆调整大小。";
+    configureCompositionSize(referenceVideo.videoWidth, referenceVideo.videoHeight);
+    scheduleVideoFrame();
+  } catch (error) {
+    console.error(error);
+    releaseCameraStream();
+    motionReady = false;
+    referenceWrap.classList.add("hidden");
+    cameraStatus.textContent = "无法打开摄像头。请允许权限，并确认摄像头未被其他应用占用。";
+    poseState.textContent = "摄像头连接失败";
+    poseState.className = "pose-state warning";
+  } finally {
+    cameraToggle.disabled = false;
+    updateSourceModeUi();
+  }
+}
+
+fileModeButton.addEventListener("click", () => setSourceMode("file"));
+cameraModeButton.addEventListener("click", () => setSourceMode("camera"));
+cameraToggle.addEventListener("click", () => {
+  if (cameraStream) {
+    stopPoseTracking();
+    releaseCameraStream();
+    motionReady = false;
+    referenceWrap.classList.add("hidden");
+    cameraStatus.textContent = "摄像头已关闭，画面和音频没有上传。";
+    studioState.textContent = "等待开启摄像头";
+    updateSourceModeUi();
+    return;
+  }
+  startCamera(cameraSelect.value);
+});
+cameraSelect.addEventListener("change", () => startCamera(cameraSelect.value));
+cameraMirrorInput.addEventListener("change", () => {
+  cameraMirrored = cameraMirrorInput.checked;
+  resetRigTracking();
+  referenceWrap.classList.toggle("camera-mirrored", cameraMirrored);
+  renderLayoutPreview();
+});
+
 motionInput.addEventListener("change", event => {
   const [file] = event.target.files;
   if (!file) return;
@@ -347,6 +524,9 @@ motionInput.addEventListener("change", event => {
   resetRigTracking();
   if (motionUrl) URL.revokeObjectURL(motionUrl);
   motionUrl = URL.createObjectURL(file);
+  sourceMode = "file";
+  referenceVideo.srcObject = null;
+  referenceVideo.controls = true;
   referenceVideo.src = motionUrl;
   referenceVideo.load();
   referenceWrap.classList.remove("hidden");
@@ -358,15 +538,21 @@ motionInput.addEventListener("change", event => {
   layoutHint.textContent = "视频将在底层播放；拖动上层纸片人调整位置，使用滑杆调整大小。";
   updatePrimaryAction();
   updateExportAction();
+  updateSourceModeUi();
 });
 
 referenceVideo.addEventListener("loadedmetadata", () => {
   const duration = referenceVideo.duration;
   const durationLabel = Number.isFinite(duration) ? `${duration.toFixed(1)} 秒` : "时长读取中";
-  motionMeta.textContent = `${durationLabel} · ${(motionInput.files[0].size / 1024 / 1024).toFixed(1)} MB`;
+  const selectedFile = motionInput.files[0];
+  if (sourceMode === "file" && selectedFile) {
+    motionMeta.textContent = `${durationLabel} · ${(selectedFile.size / 1024 / 1024).toFixed(1)} MB`;
+  }
   configureCompositionSize(referenceVideo.videoWidth, referenceVideo.videoHeight);
   renderLayoutPreview();
-  if (duration > 60) hint.textContent = "动作视频较长。绑定阶段建议先用 5–30 秒片段测试，以便快速调整骨架。";
+  if (sourceMode === "file" && duration > 60) {
+    hint.textContent = "动作视频较长。绑定阶段建议先用 5–30 秒片段测试，以便快速调整骨架。";
+  }
 });
 
 function updateLayoutFromPointer(event) {
@@ -443,22 +629,30 @@ function updatePrimaryAction() {
     return;
   }
   if (!motionReady) {
-    primaryAction.innerHTML = "<span>▶</span><strong>继续导入动作视频</strong><i>→</i>";
+    primaryAction.innerHTML = sourceMode === "camera"
+      ? "<span>●</span><strong>先开启摄像头</strong><i>→</i>"
+      : "<span>▶</span><strong>继续导入动作视频</strong><i>→</i>";
     return;
   }
   primaryAction.innerHTML = tracking
     ? "<span>■</span><strong>停止动作驱动</strong><i>→</i>"
-    : "<span>◎</span><strong>让纸片人模仿动作</strong><i>→</i>";
+    : sourceMode === "camera"
+      ? "<span>◎</span><strong>开始实时跟随</strong><i>→</i>"
+      : "<span>◎</span><strong>让纸片人模仿动作</strong><i>→</i>";
 }
 
 function updateExportAction() {
   if (exporting) {
     exportAction.disabled = false;
-    exportAction.innerHTML = "<span>■</span><strong>取消导出</strong><i>处理中</i>";
+    exportAction.innerHTML = sourceMode === "camera"
+      ? "<span>■</span><strong>停止并生成视频</strong><i>录制中</i>"
+      : "<span>■</span><strong>取消导出</strong><i>处理中</i>";
     return;
   }
   exportAction.disabled = !(characterReady && motionReady);
-  exportAction.innerHTML = "<span>●</span><strong>录制并导出视频</strong><i>WEBM</i>";
+  exportAction.innerHTML = sourceMode === "camera"
+    ? "<span>●</span><strong>开始实时录制</strong><i>WEBM</i>"
+    : "<span>●</span><strong>录制并导出视频</strong><i>WEBM</i>";
 }
 
 function configureCompositionSize(videoWidth, videoHeight) {
@@ -496,7 +690,15 @@ function renderCompositionFrame(canvas) {
   const height = canvas.height;
   context.clearRect(0, 0, width, height);
   if (motionReady && referenceVideo.readyState >= 2 && referenceVideo.videoWidth) {
-    context.drawImage(referenceVideo, 0, 0, width, height);
+    if (sourceMode === "camera" && cameraMirrored) {
+      context.save();
+      context.translate(width, 0);
+      context.scale(-1, 1);
+      context.drawImage(referenceVideo, 0, 0, width, height);
+      context.restore();
+    } else {
+      context.drawImage(referenceVideo, 0, 0, width, height);
+    }
   } else {
     drawFallbackBackground(context, width, height);
   }
@@ -903,9 +1105,9 @@ function drawLimbMesh(context, key, layerNames, sourcePoints, targetPoints, widt
   }
 }
 
-function renderRigPose(landmarks) {
+function renderRigPose(landmarks, facingLandmarks = landmarks) {
   if (!characterReady || !layerBitmaps.size) return;
-  updateFacingDirection(landmarks);
+  updateFacingDirection(facingLandmarks);
   smoothPoseLandmarks(landmarks);
 
   const poseLeftShoulder = poseSidePoint("left", "Shoulder");
@@ -1221,10 +1423,24 @@ function setExportControlsLocked(locked) {
   characterSizeInput.disabled = locked || !characterReady;
   resetLayoutButton.disabled = locked || !characterReady;
   primaryAction.disabled = locked;
+  fileModeButton.disabled = locked;
+  cameraModeButton.disabled = locked;
+  cameraSelect.disabled = locked || !cameraStream || cameraSelect.options.length < 2;
+  cameraToggle.disabled = locked;
+  cameraMirrorInput.disabled = locked;
+  cameraMicInput.disabled = locked || Boolean(cameraStream);
 }
 
 function updateExportProgress() {
   if (!exporting) return;
+  if (sourceMode === "camera") {
+    const seconds = Math.max(0, Math.floor((performance.now() - liveRecordingStartedAt) / 1000));
+    const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+    const remainder = String(seconds % 60).padStart(2, "0");
+    exportAction.innerHTML = `<span>■</span><strong>停止并生成视频</strong><i>${minutes}:${remainder}</i>`;
+    studioState.textContent = `实时录制 ${minutes}:${remainder}`;
+    return;
+  }
   const duration = referenceVideo.duration;
   const progress = Number.isFinite(duration) && duration > 0
     ? Math.min(99, Math.round(referenceVideo.currentTime / duration * 100))
@@ -1235,14 +1451,14 @@ function updateExportProgress() {
 
 function finishExportRecording(cancelled = false) {
   if (!exporting) return;
+  const liveMode = sourceMode === "camera";
   exportCancelled = cancelled;
   exporting = false;
-  tracking = false;
-  if (videoFrameCallback !== null && "cancelVideoFrameCallback" in referenceVideo) {
-    referenceVideo.cancelVideoFrameCallback(videoFrameCallback);
+  if (!liveMode) {
+    tracking = false;
+    cancelVideoFrameLoop();
+    referenceVideo.pause();
   }
-  videoFrameCallback = null;
-  referenceVideo.pause();
   clearInterval(exportProgressTimer);
   exportProgressTimer = null;
   if (mediaRecorder?.state !== "inactive") mediaRecorder.stop();
@@ -1278,10 +1494,12 @@ function finalizeExportRecording() {
   exportResult.download = `paperdoll-${stamp}.webm`;
   exportResult.textContent = `导出完成 · 下载视频（${(blob.size / 1024 / 1024).toFixed(1)} MB）`;
   exportResult.classList.remove("hidden");
-  studioState.textContent = "视频导出完成";
-  poseState.textContent = "动作已录制";
+  studioState.textContent = sourceMode === "camera" ? "实时视频已生成" : "视频导出完成";
+  poseState.textContent = sourceMode === "camera" ? "实时跟随与录制正常" : "动作已录制";
   poseState.className = "pose-state active";
-  hint.textContent = "视频已在本机生成。点击“导出完成”保存 WebM 文件，原动作视频不会上传。";
+  hint.textContent = sourceMode === "camera"
+    ? "实时合成视频已在本机生成。点击“导出完成”保存 WebM，摄像头画面没有上传。"
+    : "视频已在本机生成。点击“导出完成”保存 WebM 文件，原动作视频不会上传。";
   updatePrimaryAction();
   updateExportAction();
 }
@@ -1300,6 +1518,10 @@ async function seekReferenceVideoToStart() {
 
 async function startVideoExport() {
   if (!characterReady || !motionReady) return;
+  if (sourceMode === "camera") {
+    startLiveRecording();
+    return;
+  }
   if (!("captureStream" in exportCanvas) || !("MediaRecorder" in window)) {
     hint.textContent = "当前浏览器不支持本地画布录制，请使用最新版 Chrome 或 Edge。";
     return;
@@ -1347,7 +1569,7 @@ async function startVideoExport() {
     updateExportAction();
     mediaRecorder.start(1000);
     await referenceVideo.play();
-    videoFrameCallback = referenceVideo.requestVideoFrameCallback(processPoseFrame);
+    scheduleVideoFrame();
     exportProgressTimer = setInterval(updateExportProgress, 250);
     updateExportProgress();
     hint.textContent = "正在逐帧识别动作并录制视频与纸片人的合成画面；点击导出按钮可取消。";
@@ -1366,14 +1588,81 @@ async function startVideoExport() {
   }
 }
 
+async function startLiveRecording() {
+  if (!characterReady || !cameraStream || !motionReady) return;
+  if (!("captureStream" in exportCanvas) || !("MediaRecorder" in window)) {
+    hint.textContent = "当前浏览器不支持实时画布录制，请使用最新版 Chrome 或 Edge。";
+    return;
+  }
+
+  clearExportResult();
+  setExportControlsLocked(true);
+  exportAction.disabled = true;
+  poseState.textContent = "正在准备实时识别与录制";
+  poseState.className = "pose-state";
+  studioState.textContent = "准备实时录制";
+  try {
+    await ensurePoseLandmarker();
+    tracking = true;
+    resetRigTracking();
+    renderCharacterComposite();
+    const outputStream = exportCanvas.captureStream(30);
+    for (const track of cameraStream.getAudioTracks()) outputStream.addTrack(track);
+    const mimeType = preferredRecorderMimeType();
+    mediaRecorder = mimeType
+      ? new MediaRecorder(outputStream, { mimeType, videoBitsPerSecond:5_000_000 })
+      : new MediaRecorder(outputStream, { videoBitsPerSecond:5_000_000 });
+    exportChunks = [];
+    exportCancelled = false;
+    mediaRecorder.addEventListener("dataavailable", event => {
+      if (event.data.size) exportChunks.push(event.data);
+    });
+    mediaRecorder.addEventListener("stop", finalizeExportRecording, { once:true });
+    mediaRecorder.addEventListener("error", event => {
+      console.error(event.error || event);
+      exportCancelled = true;
+      finishExportRecording(true);
+    });
+    exporting = true;
+    liveRecordingStartedAt = performance.now();
+    mediaRecorder.start(1000);
+    exportAction.disabled = false;
+    scheduleVideoFrame();
+    exportProgressTimer = setInterval(updateExportProgress, 250);
+    updateExportProgress();
+    hint.textContent = "正在本机录制摄像头、纸片人和麦克风声音。完成后点击“停止并生成视频”。";
+  } catch (error) {
+    console.error(error);
+    exporting = false;
+    exportCancelled = true;
+    setExportControlsLocked(false);
+    poseState.textContent = "实时录制准备失败";
+    poseState.className = "pose-state warning";
+    hint.textContent = "无法启动实时录制，请检查摄像头权限和 MediaPipe 模型网络。";
+    updatePrimaryAction();
+    updateExportAction();
+  }
+}
+
+function scheduleVideoFrame() {
+  if (videoFrameCallback !== null || !("requestVideoFrameCallback" in referenceVideo)) return;
+  videoFrameCallback = referenceVideo.requestVideoFrameCallback(processPoseFrame);
+}
+
+function mirroredLandmarks(landmarks) {
+  if (sourceMode !== "camera" || !cameraMirrored) return landmarks;
+  return landmarks.map(point => ({ ...point, x:1 - point.x }));
+}
+
 function processPoseFrame() {
-  if (!tracking) return;
-  if (referenceVideo.readyState >= 2) {
+  videoFrameCallback = null;
+  if (referenceVideo.readyState >= 2 && tracking && poseLandmarker) {
     const result = poseLandmarker.detectForVideo(referenceVideo, performance.now());
-    const landmarks = result.landmarks?.[0];
+    const rawLandmarks = result.landmarks?.[0];
+    const landmarks = rawLandmarks ? mirroredLandmarks(rawLandmarks) : null;
     if (landmarks) {
       drawPose(landmarks);
-      renderRigPose(landmarks);
+      renderRigPose(landmarks, rawLandmarks);
       const trackedIndexes = [
         0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28
       ];
@@ -1388,23 +1677,42 @@ function processPoseFrame() {
         poseState.className = "pose-state warning";
       }
       if (!exporting) studioState.textContent = "动作驱动中";
+      if (sourceMode === "camera") {
+        liveFrameCount += 1;
+        const now = performance.now();
+        if (!liveFpsStartedAt) liveFpsStartedAt = now;
+        if (now - liveFpsStartedAt >= 1000) {
+          const fps = Math.round(liveFrameCount * 1000 / (now - liveFpsStartedAt));
+          cameraStatus.textContent = `实时跟随中 · ${fps} FPS${cameraStream?.getAudioTracks().length ? " · 麦克风已连接" : " · 静音"}`;
+          liveFrameCount = 0;
+          liveFpsStartedAt = now;
+        }
+      }
     } else {
       poseState.textContent = "未识别到人物 · 保持上一姿态";
       poseState.className = "pose-state warning";
       renderLayoutPreview();
     }
     if (exporting) renderExportFrame();
+  } else if (sourceMode === "camera" && referenceVideo.readyState >= 2) {
+    renderLayoutPreview();
   }
-  videoFrameCallback = referenceVideo.requestVideoFrameCallback(processPoseFrame);
+  if (tracking || sourceMode === "camera") scheduleVideoFrame();
 }
 
 function stopPoseTracking() {
   tracking = false;
-  if (videoFrameCallback !== null && "cancelVideoFrameCallback" in referenceVideo) {
-    referenceVideo.cancelVideoFrameCallback(videoFrameCallback);
+  liveFrameCount = 0;
+  liveFpsStartedAt = 0;
+  if (sourceMode === "file") {
+    cancelVideoFrameLoop();
+    referenceVideo.pause();
+  } else if (cameraStream) {
+    poseState.textContent = "摄像头已连接 · 跟随已暂停";
+    poseState.className = "pose-state";
+    cameraStatus.textContent = "摄像头画面继续预览，动作跟随已暂停。";
+    scheduleVideoFrame();
   }
-  videoFrameCallback = null;
-  referenceVideo.pause();
   updatePrimaryAction();
 }
 
@@ -1415,7 +1723,8 @@ primaryAction.addEventListener("click", async () => {
     return;
   }
   if (!motionReady) {
-    motionInput.click();
+    if (sourceMode === "camera") startCamera(cameraSelect.value);
+    else motionInput.click();
     return;
   }
   if (tracking) {
@@ -1432,8 +1741,10 @@ primaryAction.addEventListener("click", async () => {
     tracking = true;
     if (referenceVideo.ended) referenceVideo.currentTime = 0;
     await referenceVideo.play();
-    videoFrameCallback = referenceVideo.requestVideoFrameCallback(processPoseFrame);
-    hint.textContent = "纸片人已开始模仿动作。抬手时手掌会沿前臂方向响应；人物背身时会自动交换左右侧，短暂丢点则保持上一姿态。";
+    scheduleVideoFrame();
+    hint.textContent = sourceMode === "camera"
+      ? "实时跟随已启动。保持全身入镜和光线充足；镜像开关会同时作用于摄像头背景和动作方向。"
+      : "纸片人已开始模仿动作。抬手时手掌会沿前臂方向响应；人物背身时会自动交换左右侧，短暂丢点则保持上一姿态。";
   } catch (error) {
     console.error(error);
     poseState.textContent = "识别模型加载失败";
@@ -1447,19 +1758,26 @@ primaryAction.addEventListener("click", async () => {
 
 exportAction.addEventListener("click", () => {
   if (exporting) {
-    finishExportRecording(true);
+    finishExportRecording(sourceMode !== "camera");
     return;
   }
   startVideoExport();
 });
 
 referenceVideo.addEventListener("ended", () => {
+  if (sourceMode === "camera") return;
   if (exporting) {
     finishExportRecording(false);
     return;
   }
   stopPoseTracking();
   studioState.textContent = "动作检查完成";
+});
+
+window.addEventListener("beforeunload", () => {
+  if (cameraStream) {
+    for (const track of cameraStream.getTracks()) track.stop();
+  }
 });
 
 renderLayerChecklist();

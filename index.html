@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="导入标准分层纸片人和真人动作视频，在本机完成动作驱动" />
+    <meta name="description" content="导入分层纸片人，通过视频或摄像头在本机完成动作驱动" />
     <title>纸片舞伴 · 本地动作工作台</title>
     <link rel="stylesheet" href="styles.css?v=21" />
-    <link rel="stylesheet" href="composition.css?v=1" />
+    <link rel="stylesheet" href="composition.css?v=2" />
     <link rel="stylesheet" href="demo.css?v=2" />
   </head>
   <body>
@@ -19,7 +19,7 @@
       <section class="hero">
         <p class="eyebrow">LOCAL 2D MOTION STUDIO</p>
         <h1>角色绑定一次，<em>动作无限复用</em>。</h1>
-        <p>导入分层纸片人和真人动作视频，在本机完成动作识别、画面布局与合成导出。</p>
+        <p>导入分层纸片人，通过视频文件或实时摄像头，在本机完成动作识别、画面布局与合成导出。</p>
       </section>
 
       <section class="studio" id="studio">
@@ -44,11 +44,24 @@
             <ul class="validation-errors hidden" id="validation-errors"></ul>
           </section>
 
-          <div class="section-title motion-heading"><span>2</span><div><strong>导入动作与背景视频</strong><small>视频作为画面底层，同时用于全身动作识别</small></div></div>
+          <div class="section-title motion-heading"><span>2</span><div><strong>选择动作来源</strong><small>使用视频文件，或打开摄像头实时驱动</small></div></div>
+          <div class="source-tabs" role="group" aria-label="动作来源">
+            <button class="active" id="file-mode" type="button">视频文件</button>
+            <button id="camera-mode" type="button">实时摄像头</button>
+          </div>
           <label class="video-drop" for="motion-input">
             <input id="motion-input" type="file" accept="video/mp4,video/quicktime,video/webm" />
             <b>▶</b><div><strong id="motion-name">选择动作视频</strong><small id="motion-meta">MP4、MOV 或 WebM</small></div><i>＋</i>
           </label>
+          <div class="camera-panel hidden" id="camera-panel">
+            <div class="camera-row">
+              <label for="camera-select"><span>摄像头</span><select id="camera-select" disabled><option value="">开启后自动选择</option></select></label>
+              <button id="camera-toggle" type="button">开启摄像头</button>
+            </div>
+            <label class="mirror-toggle" for="camera-mirror"><input id="camera-mirror" type="checkbox" checked /><span>镜像预览</span><small>对着屏幕跳舞时动作方向更直观</small></label>
+            <label class="mirror-toggle" for="camera-mic"><input id="camera-mic" type="checkbox" /><span>录制麦克风</span><small>默认关闭；开启后会同时请求麦克风权限</small></label>
+            <p id="camera-status">摄像头画面和姿态识别只在本机处理。</p>
+          </div>
           <div class="reference-wrap hidden" id="reference-wrap">
             <video id="reference-video" controls playsinline muted></video>
             <canvas id="pose-canvas" aria-hidden="true"></canvas>
@@ -88,6 +101,6 @@
         <article class="active"><b>04</b><strong>合成导出</strong><p>视频置底、纸片人置顶，按当前布局录制带音频成片。</p></article>
       </section>
     </main>
-    <script type="module" src="app.js?v=69"></script>
+    <script type="module" src="app.js?v=70"></script>
   </body>
 </html>
