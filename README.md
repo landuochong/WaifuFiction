@@ -102,3 +102,24 @@ right_thigh.png            right_calf.png            right_foot.png
 - 不需要 `FAL_KEY` 或其他付费服务密钥。
 - 不产生按生成次数收取的费用。
 - 角色图层和动作视频由浏览器直接读取，不发送到项目后端。
+
+## 打赏支持
+
+如果纸片舞伴对你有帮助，欢迎请作者喝杯咖啡，支持项目继续完善。打赏完全自愿，感谢你的支持！
+
+使用微信或支付宝扫描对应收款码即可打赏，点击图片可查看原图。
+
+<table>
+  <tr>
+    <th>微信支付</th>
+    <th>支付宝</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="docs/images/wechat-pay.jpeg"><img src="docs/images/wechat-pay.jpeg" alt="微信打赏收款码" width="280" /></a>
+    </td>
+    <td align="center">
+      <a href="docs/images/alipay.jpeg"><img src="docs/images/alipay.jpeg" alt="支付宝打赏收款码" width="280" /></a>
+    </td>
+  </tr>
+</table>
